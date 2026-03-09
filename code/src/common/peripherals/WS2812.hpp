@@ -72,6 +72,11 @@ public:
     };
 
     /**
+     * @brief Default constructor for the WS2812 class. Does not initialize the hardware.
+     */
+    WS2812(void) {};
+
+    /**
      * @brief Constructor for the WS2812 class.
      * @param pin GPIO pin number.
      * @param length Number of LEDs in the chain.
