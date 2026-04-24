@@ -22,6 +22,7 @@ Desktop.ini
 
 # VS Code
 .vscode/settings.json
+.vscode/task-history.ndjson
 
 # Vim
 *.sw?
