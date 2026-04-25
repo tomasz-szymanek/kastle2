@@ -90,6 +90,11 @@ void Base::Init()
                                           .layer = Hardware::Layer::SHIFT,
                                           .midi_cc = cc::TEMPO});
 
+    // Mode
+    pots_[Pot::SWING] = FancyPot::Create({.pot = Hardware::Pot::POT_7,
+                                          .layer = Hardware::Layer::MODE,
+                                          .initial_value = POT_HALF});
+
     // Settings
     pots_[Pot::MONO_INPUT] = FancyPot::Create({.pot = Hardware::Pot::POT_1,
                                                .layer = Hardware::Layer::SETTINGS,
@@ -359,7 +364,6 @@ FASTCODE void Base::BeforeAudioLoop(q15_t *input, size_t size)
         }
         else
         {
-            // New sequencer beat
             Hardware::FeedValue feed1 = Kastle2::hw.GetFeedValue(Hardware::AnalogInput::FEED_1);
             Sequencer::Feed trigger_feed;
 
@@ -392,14 +396,31 @@ FASTCODE void Base::BeforeAudioLoop(q15_t *input, size_t size)
                 break;
             }
 
-            sequencer_.NextStep(trigger_feed, cv_feed);
-            do_cv_update = true;
+            if (sequencer_.IsSwingActive())
+            {
+                pending_trigger_feed_ = trigger_feed;
+                pending_cv_feed_ = cv_feed;
+                swing_step_pending_ = true;
+                sequencer_.ScheduleSwingStep(clock_.GetAverageTargetTicks());
+            }
+            else
+            {
+                sequencer_.NextStep(trigger_feed, cv_feed);
+                do_cv_update = true;
+            }
         }
 
         // clocked LFO sync
         lfo_.SyncWithClock();
     }
     clock_midi_pulse_ = false;
+
+    if (swing_step_pending_ && sequencer_.ProcessSwingTick())
+    {
+        sequencer_.NextStep(pending_trigger_feed_, pending_cv_feed_);
+        do_cv_update = true;
+        swing_step_pending_ = false;
+    }
 
     if (lfo_.IsSynced())
     {
@@ -798,6 +819,11 @@ void Base::BeforeUiLoop()
             pot_to_q15(pots_[Pot::RHYTHM]->GetValue()));
     }
 
+    if (pots_[Pot::SWING]->HasChanged())
+    {
+        sequencer_.SetSwing(static_cast<float>(pots_[Pot::SWING]->GetValue()) / static_cast<float>(POT_MAX));
+    }
+
     leds_should_be_off_ = shift_and_mode_pressed_count_ > 1000;
 
     if (Kastle2::hw.HasLedsJustUpdated())
@@ -860,17 +886,18 @@ void Base::BeforeUiLoop()
                 bool led_state = fake_blinker_.GetTempoLedState(clock_);
                 Kastle2::hw.SetLed(Hardware::Led::LED_3, led_state ? color : 0);
             }
+            else if (Kastle2::hw.GetLayer() == Hardware::Layer::MODE && sequencer_.IsSwingActive())
+            {
+                float swing = sequencer_.GetSwing();
+                uint32_t color = (swing > 0.55f) ? WS2812::ORANGE : WS2812::CYAN;
+                float intensity = (swing > 0.55f) ? (swing - 0.5f) * 2.0f : (0.5f - swing) * 2.0f;
+                uint8_t brightness = static_cast<uint8_t>(intensity * 255.0f);
+                Kastle2::hw.SetLed(Hardware::Led::LED_3, WS2812::ApplyBrightness(color, brightness));
+            }
             else
             {
-                // Showing LFO
-
-                // Pick the color
                 uint32_t color = lfo_.IsSynced() ? kBaseColorLfoSynced : kBaseColorLfoFree;
-
-                // We use the FakeBlinker class to solve the interferences
                 uint8_t brightness = fake_blinker_.GetLfoLedBrightness(lfo_);
-
-                // Set the LED
                 Kastle2::hw.SetLed(Hardware::Led::LED_3, WS2812::ApplyBrightness(color, brightness));
             }
             if (IsFeatureEnabled(Feature::INPUT_INDICATION))

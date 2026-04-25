@@ -25,7 +25,9 @@ SOFTWARE.
 #pragma once
 
 #include <bitset>
+#include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <span>
 #include "TriggerGenerator.hpp"
 
@@ -162,9 +164,12 @@ public:
      */
     bool ReachingNextCycle();
 
-    /**
-     * @brief Minimum number of steps supported by the sequencer.
-     */
+    void SetSwing(float value);
+    float GetSwing() const { return swing_amount_; }
+    void ScheduleSwingStep(uint32_t step_ticks);
+    bool ProcessSwingTick();
+    bool IsSwingActive() const;
+
     static constexpr size_t kMinLength = 2;
 
     /**
@@ -234,5 +239,13 @@ private:
      * @brief Flag indicating if CV is being prepared for the next cycle.
      */
     bool reaching_next_cycle_ = false;
+
+    static constexpr float kHumanizePattern[] = {0.1f, -0.05f, 0.08f, 0.02f, -0.1f, 0.05f, -0.03f, 0.09f};
+    static constexpr size_t kHumanizePatternLength = sizeof(kHumanizePattern) / sizeof(float);
+    float swing_amount_ = 0.5f;
+    uint32_t swing_delay_counter_ = 0;
+    bool swing_pending_ = false;
+    bool swing_even_step_ = false;
+    size_t humanize_index_ = 0;
 };
 }

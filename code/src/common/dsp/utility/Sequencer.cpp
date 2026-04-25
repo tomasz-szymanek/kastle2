@@ -185,3 +185,54 @@ uint32_t Sequencer::GetCvOutput() const
 {
     return cv_output_;
 }
+
+void Sequencer::SetSwing(float value)
+{
+    swing_amount_ = value;
+}
+
+void Sequencer::ScheduleSwingStep(uint32_t step_ticks)
+{
+    uint32_t delay = 0;
+
+    if (swing_amount_ > 0.55f)
+    {
+        if (swing_even_step_)
+        {
+            delay = step_ticks * (swing_amount_ - 0.5f);
+        }
+    }
+    else if (swing_amount_ < 0.45f)
+    {
+        float jitter_depth = (0.5f - swing_amount_) * 2.0f;
+        float factor = kHumanizePattern[humanize_index_];
+        humanize_index_ = (humanize_index_ + 1) % kHumanizePatternLength;
+        delay = step_ticks * jitter_depth * 0.6f * std::abs(factor);
+    }
+
+    swing_delay_counter_ = delay;
+    swing_pending_ = true;
+    swing_even_step_ = !swing_even_step_;
+}
+
+bool Sequencer::ProcessSwingTick()
+{
+    if (!swing_pending_)
+    {
+        return false;
+    }
+
+    if (swing_delay_counter_ > 0)
+    {
+        swing_delay_counter_--;
+        return false;
+    }
+
+    swing_pending_ = false;
+    return true;
+}
+
+bool Sequencer::IsSwingActive() const
+{
+    return swing_amount_ < 0.45f || swing_amount_ > 0.55f;
+}
