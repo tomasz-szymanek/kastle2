@@ -150,6 +150,12 @@ bool Sequencer::ReachingNextCycle()
 
 bool Sequencer::GetTriggerOutput() const
 {
+    // While a swing step is pending the audible trigger has to be silenced;
+    // it will be re-issued by the delayed NextStep() call.
+    if (swing_pending_)
+    {
+        return false;
+    }
     return trigger_output_;
 }
 
@@ -188,26 +194,53 @@ uint32_t Sequencer::GetCvOutput() const
 
 void Sequencer::SetSwing(float value)
 {
-    swing_amount_ = value;
+    swing_value_ = value;
+
+    // Pre-compute the swing type and the normalized strength so the
+    // audio thread never has to do float compares or multiplies.
+    if (value > kSwingActiveThreshold)
+    {
+        swing_type_ = SwingType::SWING;
+        swing_amount_ = (value - 0.5f) * 2.0f;
+    }
+    else if (value < kSwingHumanizeThreshold)
+    {
+        swing_type_ = SwingType::HUMANIZE;
+        swing_amount_ = (0.5f - value) * 2.0f;
+    }
+    else
+    {
+        swing_type_ = SwingType::NONE;
+        swing_amount_ = 0.0f;
+    }
 }
 
 void Sequencer::ScheduleSwingStep(uint32_t step_ticks)
 {
     uint32_t delay = 0;
 
-    if (swing_amount_ > 0.55f)
+    switch (swing_type_)
     {
+    case SwingType::SWING:
         if (swing_even_step_)
         {
-            delay = step_ticks * (swing_amount_ - 0.5f);
+            delay = static_cast<uint32_t>(step_ticks * (swing_value_ - 0.5f));
         }
-    }
-    else if (swing_amount_ < 0.45f)
+        break;
+
+    case SwingType::HUMANIZE:
     {
-        float jitter_depth = (0.5f - swing_amount_) * 2.0f;
-        float factor = kHumanizePattern[humanize_index_];
-        humanize_index_ = (humanize_index_ + 1) % kHumanizePatternLength;
-        delay = step_ticks * jitter_depth * 0.6f * std::abs(factor);
+        // kHumanizePattern is pre-baked: values already include
+        // std::abs() and the 4.0f intensity multiplier.
+        const float factor = kHumanizePattern[humanize_index_];
+        humanize_index_ = (humanize_index_ + 1) % kHumanizePattern.size();
+        delay = static_cast<uint32_t>(step_ticks * swing_amount_ * factor);
+        break;
+    }
+
+    case SwingType::NONE:
+    default:
+        break;
     }
 
     swing_delay_counter_ = delay;
@@ -230,9 +263,4 @@ bool Sequencer::ProcessSwingTick()
 
     swing_pending_ = false;
     return true;
-}
-
-bool Sequencer::IsSwingActive() const
-{
-    return swing_amount_ < 0.45f || swing_amount_ > 0.55f;
 }

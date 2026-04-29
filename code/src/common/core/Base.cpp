@@ -396,7 +396,7 @@ FASTCODE void Base::BeforeAudioLoop(q15_t *input, size_t size)
                 break;
             }
 
-            if (sequencer_.IsSwingActive())
+            if (sequencer_.GetSwingType() != Sequencer::SwingType::NONE)
             {
                 pending_trigger_feed_ = trigger_feed;
                 pending_cv_feed_ = cv_feed;
@@ -886,13 +886,27 @@ void Base::BeforeUiLoop()
                 bool led_state = fake_blinker_.GetTempoLedState(clock_);
                 Kastle2::hw.SetLed(Hardware::Led::LED_3, led_state ? color : 0);
             }
-            else if (Kastle2::hw.GetLayer() == Hardware::Layer::MODE && sequencer_.IsSwingActive())
+            else if (Kastle2::hw.GetLayer() == Hardware::Layer::MODE)
             {
-                float swing = sequencer_.GetSwing();
-                uint32_t color = (swing > 0.55f) ? WS2812::ORANGE : WS2812::CYAN;
-                float intensity = (swing > 0.55f) ? (swing - 0.5f) * 2.0f : (0.5f - swing) * 2.0f;
-                uint8_t brightness = static_cast<uint8_t>(intensity * 255.0f);
-                Kastle2::hw.SetLed(Hardware::Led::LED_3, WS2812::ApplyBrightness(color, brightness));
+                // BANK/MODE layer: show swing state on LED_3, or keep it black
+                // when swing is in the dead zone.
+                switch (sequencer_.GetSwingType())
+                {
+                case Sequencer::SwingType::SWING:
+                case Sequencer::SwingType::HUMANIZE:
+                {
+                    uint32_t color = (sequencer_.GetSwingType() == Sequencer::SwingType::SWING)
+                                         ? WS2812::ORANGE
+                                         : WS2812::CYAN;
+                    uint8_t brightness = static_cast<uint8_t>(sequencer_.GetSwingAmount() * 255.0f);
+                    Kastle2::hw.SetLed(Hardware::Led::LED_3, WS2812::ApplyBrightness(color, brightness));
+                    break;
+                }
+                case Sequencer::SwingType::NONE:
+                default:
+                    Kastle2::hw.SetLed(Hardware::Led::LED_3, WS2812::NONE);
+                    break;
+                }
             }
             else
             {
