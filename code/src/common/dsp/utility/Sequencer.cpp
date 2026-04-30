@@ -201,12 +201,14 @@ void Sequencer::SetSwing(float value)
     if (value > kSwingActiveThreshold)
     {
         swing_type_ = SwingType::SWING;
-        swing_amount_ = (value - 0.5f) * 2.0f;
+        // Normalize so swing_amount_ reaches 1.0 at value == 1.0
+        swing_amount_ = (value - kSwingActiveThreshold) / (1.0f - kSwingActiveThreshold);
     }
     else if (value < kSwingHumanizeThreshold)
     {
         swing_type_ = SwingType::HUMANIZE;
-        swing_amount_ = (0.5f - value) * 2.0f;
+        // Normalize so swing_amount_ reaches 1.0 at value == 0.0
+        swing_amount_ = (kSwingHumanizeThreshold - value) / kSwingHumanizeThreshold;
     }
     else
     {
@@ -224,14 +226,14 @@ void Sequencer::ScheduleSwingStep(uint32_t step_ticks)
     case SwingType::SWING:
         if (swing_even_step_)
         {
-            delay = static_cast<uint32_t>(step_ticks * (swing_value_ - 0.5f));
+            // Cap delay at half a step so even steps stay before the midpoint
+            // to the next odd step (musically meaningful swing range).
+            delay = static_cast<uint32_t>(step_ticks * swing_amount_ * 0.5f);
         }
         break;
 
     case SwingType::HUMANIZE:
     {
-        // kHumanizePattern is pre-baked: values already include
-        // std::abs() and the 4.0f intensity multiplier.
         const float factor = kHumanizePattern[humanize_index_];
         humanize_index_ = (humanize_index_ + 1) % kHumanizePattern.size();
         delay = static_cast<uint32_t>(step_ticks * swing_amount_ * factor);

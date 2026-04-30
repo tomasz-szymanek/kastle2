@@ -197,9 +197,9 @@ public:
 
     /**
      * @brief Gets the cached normalized swing strength.
-     * @return 0.0 at the dead zone, growing to 1.0 at extremes.
-     *         For SWING this corresponds to (swing - 0.5) * 2.0.
-     *         For HUMANIZE this corresponds to (0.5 - swing) * 2.0.
+     * @return 0.0 at the dead zone, reaching 1.0 at the extremes.
+     *         For SWING this is (swing - kSwingActiveThreshold) / (1.0 - kSwingActiveThreshold).
+     *         For HUMANIZE this is (kSwingHumanizeThreshold - swing) / kSwingHumanizeThreshold.
      */
     float GetSwingAmount() const { return swing_amount_; }
 
@@ -299,14 +299,16 @@ private:
     bool reaching_next_cycle_ = false;
 
     /**
+     * @brief Humanize intensity multiplier applied to every entry in kHumanizePattern.
+     */
+    static constexpr float kHumanizeIntensity = 4.0f;
+
+    /**
      * @brief Pre-baked humanize delay coefficients.
-     *
-     * Values are |original_pattern| * 4.0f so neither std::abs() nor
-     * the 4.0f multiplier are recomputed on the audio thread.
      */
     static constexpr std::array<float, 8> kHumanizePattern = {
-        0.1f * 4.0f,  0.05f * 4.0f, 0.08f * 4.0f, 0.02f * 4.0f,
-        0.1f * 4.0f,  0.05f * 4.0f, 0.03f * 4.0f, 0.09f * 4.0f};
+        0.1f * kHumanizeIntensity,  0.05f * kHumanizeIntensity, 0.08f * kHumanizeIntensity, 0.02f * kHumanizeIntensity,
+        0.1f * kHumanizeIntensity,  0.05f * kHumanizeIntensity, 0.03f * kHumanizeIntensity, 0.09f * kHumanizeIntensity};
 
     float swing_value_ = 0.5f;
     float swing_amount_ = 0.0f;

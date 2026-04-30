@@ -93,7 +93,9 @@ void Base::Init()
     // Mode
     pots_[Pot::SWING] = FancyPot::Create({.pot = Hardware::Pot::POT_7,
                                           .layer = Hardware::Layer::MODE,
-                                          .initial_value = POT_HALF});
+                                          .initial_value = POT_HALF,
+                                          .midi_cc = cc::SWING,
+                                          .memory_addr = Memory::ADDR_SWING});
 
     // Settings
     pots_[Pot::MONO_INPUT] = FancyPot::Create({.pot = Hardware::Pot::POT_1,
@@ -910,8 +912,12 @@ void Base::BeforeUiLoop()
             }
             else
             {
+                // Showing LFO
+                // Pick the color
                 uint32_t color = lfo_.IsSynced() ? kBaseColorLfoSynced : kBaseColorLfoFree;
+                // We use the FakeBlinker class to solve the interferences
                 uint8_t brightness = fake_blinker_.GetLfoLedBrightness(lfo_);
+                // Set the LED
                 Kastle2::hw.SetLed(Hardware::Led::LED_3, WS2812::ApplyBrightness(color, brightness));
             }
             if (IsFeatureEnabled(Feature::INPUT_INDICATION))
